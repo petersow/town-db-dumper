@@ -1,0 +1,71 @@
+#!/usr/bin/env ruby
+$LOAD_PATH.push File.join(File.dirname(__FILE__), "../lib")
+require 'town'
+
+require 'active_record'
+require 'yaml'
+
+class Test
+  def puts(string)
+    # Create a insert SQL statement
+    print string
+  end
+end
+test = Test.new
+test.puts "test"
+
+dbconfig = YAML::load(File.open('config/database.yml'))
+ActiveRecord::Base.establish_connection(dbconfig['development'])
+
+
+class Person < ActiveRecord::Base
+
+end
+
+class Clock < ActiveRecord::Base
+
+  def update(values)
+    values.each do |value|
+      self.update_attribute(value[0],value[1])
+    end
+  end
+
+end
+
+runner = Town::Runner.new(STDOUT, :output_format => "yaml")
+
+Person.delete_all
+runner.people.each do |person|
+  yaml = YAML.load person.to_yaml
+  Person.create(yaml['values'])
+end
+puts "People: #{Person.count}\n"
+puts "#{Clock.count}\n"
+#runner = Town::Runner.new(Test.new, :output_format => "yaml")
+
+yaml = YAML.load runner.clock.to_yaml
+Clock.delete_all
+clock = Clock.create yaml['values']
+
+@action_generator = Town::ActionGenerator.new
+
+while true do
+  runner.clock.tick
+  yaml = YAML.load runner.clock.to_yaml
+  puts yaml.inspect
+  Clock.delete_all
+  values = yaml['values']
+  Clock.create values
+  puts "#{Clock.count}\n"
+  @action_generator.time = runner.clock.time
+  runner.people.each do |person|
+    person.current_action = @action_generator.next_action(person)
+    Person.delete_all
+    yaml = YAML.load person.to_yaml
+    Person.create(yaml['values'])
+    puts yaml.inspect
+  end
+  sleep 1
+end
+
+#runner.start
